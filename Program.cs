@@ -89,7 +89,7 @@ namespace Lercher.Ping
                 Console.Write("Don't fragment: {0}, ", reply.Options.DontFragment);
                 Console.Write("Buffer size: {0}", reply.Buffer.Length);
                 System.Console.WriteLine();
-                return "OK";
+                return string.Format("OK in {0}ms", ((reply.RoundtripTime + 99) / 100) * 100);
             }
             else
             {
