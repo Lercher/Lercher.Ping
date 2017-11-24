@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 
 namespace Lercher.Ping
 {
@@ -78,18 +79,26 @@ namespace Lercher.Ping
             var po = new System.Net.NetworkInformation.PingOptions();
             var data = "abcdefghijklmnopqrstuvwxyz012345";
             var buffer = System.Text.Encoding.ASCII.GetBytes(data);
-            var timeout = (int)TimeSpan.FromSeconds(1).TotalMilliseconds;
+            var timeout = (int)TimeSpan.FromSeconds(5).TotalMilliseconds;
             var reply = ping.Send(addr, timeout, buffer, po);
             if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
             {
-                Console.Write("{0} OK - ", DateTime.Now);
-                Console.Write("Address: {0}, ", reply.Address);
-                Console.Write("RoundTrip time: {0}, ", reply.RoundtripTime);
-                Console.Write("Time to live: {0}, ", reply.Options.Ttl);
-                Console.Write("Don't fragment: {0}, ", reply.Options.DontFragment);
-                Console.Write("Buffer size: {0}", reply.Buffer.Length);
-                System.Console.WriteLine();
-                return string.Format("OK in {0}ms", ((reply.RoundtripTime + 99) / 100) * 100);
+                long next100msRoundtripTime = ((reply.RoundtripTime + 99) / 100) * 100;
+                if (buffer.SequenceEqual(reply.Buffer))
+                {
+                    Console.Write("{0} OK - ", DateTime.Now);
+                    Console.Write("Address: {0}, ", reply.Address);
+                    Console.Write("RoundTrip time: {0}, ", reply.RoundtripTime);
+                    Console.Write("Time to live: {0}, ", reply.Options.Ttl);
+                    Console.Write("Don't fragment: {0}, ", reply.Options.DontFragment);
+                    Console.Write("Buffer size: {0}", reply.Buffer.Length);
+                    System.Console.WriteLine();
+                    return string.Format("OK within {0}ms", next100msRoundtripTime);
+                }
+                else
+                {
+                    return string.Format("Buffer mismatch within {0}ms", next100msRoundtripTime);
+                }
             }
             else
             {
