@@ -45,7 +45,7 @@ namespace Lercher.Ping1
             if (fi.Exists)
                 pos = fi.Length;
             var qy = from a in SinglePing.Tracert(addr) select a.ToString();
-            var trace = string.Join(" ", qy.ToArray());
+            var trace = string.Join("->", qy.ToArray());
             log(string.Format("*START* {0}", trace));
         }
 
