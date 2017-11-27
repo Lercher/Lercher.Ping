@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Net.NetworkInformation;
+using System.Net;
 
-namespace Lercher.Ping
+namespace Lercher.Ping1
 {
     class Program
     {
@@ -41,7 +44,9 @@ namespace Lercher.Ping
             var fi = new System.IO.FileInfo(fn);
             if (fi.Exists)
                 pos = fi.Length;
-            log("*START*");
+            var qy = from a in SinglePing.Tracert(addr) select a.ToString();
+            var trace = string.Join(" ", qy.ToArray());
+            log(string.Format("*START* {0}", trace));
         }
 
         public void log(string state)
@@ -73,37 +78,88 @@ namespace Lercher.Ping
     }
     public static class SinglePing
     {
-        public static string Ping(string addr)
+        private static int timeout5s = 5000;
+        private static int timeout1s = 1000;
+        private static Ping ping = new Ping();
+
+        public static IEnumerable<IPAddress> Tracert(string addr)
         {
-            var ping = new System.Net.NetworkInformation.Ping();
-            var po = new System.Net.NetworkInformation.PingOptions();
-            var data = "abcdefghijklmnopqrstuvwxyz012345";
-            var buffer = System.Text.Encoding.ASCII.GetBytes(data);
-            var timeout = (int)TimeSpan.FromSeconds(5).TotalMilliseconds;
-            var reply = ping.Send(addr, timeout, buffer, po);
-            if (reply.Status == System.Net.NetworkInformation.IPStatus.Success)
+            for (var ttl = 1; ttl < 128; ttl++)
             {
-                long next100msRoundtripTime = ((reply.RoundtripTime + 99) / 100) * 100;
-                if (buffer.SequenceEqual(reply.Buffer))
+                var po = new PingOptions(ttl, dontFragment: true);
+                var data = "abcdefghijklmnopqrstuvwxyz012345";
+                var buffer = System.Text.Encoding.ASCII.GetBytes(data);
+                PingReply reply;
+                try
                 {
-                    Console.Write("{0} OK - ", DateTime.Now);
-                    Console.Write("Address: {0}, ", reply.Address);
-                    Console.Write("RoundTrip time: {0}, ", reply.RoundtripTime);
-                    Console.Write("Time to live: {0}, ", reply.Options.Ttl);
-                    Console.Write("Don't fragment: {0}, ", reply.Options.DontFragment);
-                    Console.Write("Buffer size: {0}", reply.Buffer.Length);
-                    System.Console.WriteLine();
-                    return string.Format("OK within {0}ms", next100msRoundtripTime);
+                    reply = ping.Send(addr, timeout1s, buffer, po);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    if (ex.InnerException != null)
+                        Console.WriteLine(ex.InnerException.Message);
+                    yield break;
+                }
+                if (reply.Status == IPStatus.TtlExpired)
+                {
+                    yield return reply.Address;
+                }
+                else if (reply.Status == IPStatus.Success)
+                {
+                    yield return reply.Address;
+                    yield break;
                 }
                 else
                 {
-                    return string.Format("Buffer mismatch within {0}ms", next100msRoundtripTime);
+                    yield break;
                 }
             }
-            else
+        }
+
+        public static string Ping(string addr)
+        {
+            var ttl = 128;
+            var po = new PingOptions(ttl, dontFragment: true);
+            var data = "abcdefghijklmnopqrstuvwxyz012345";
+            var buffer = System.Text.Encoding.ASCII.GetBytes(data);
+            try
             {
-                Console.WriteLine("{0} FA - ping {1} failed: {2}", DateTime.Now, addr, reply.Status);
-                return reply.Status.ToString();
+                var reply = ping.Send(addr, timeout5s, buffer, po);
+                if (reply.Status == IPStatus.Success)
+                {
+                    long next100msRoundtripTime = ((reply.RoundtripTime + 99) / 100) * 100;
+                    if (buffer.SequenceEqual(reply.Buffer))
+                    {
+                        Console.Write("{0} OK - ", DateTime.Now);
+                        Console.Write("Address: {0}, ", reply.Address);
+                        Console.Write("RoundTrip time: {0}, ", reply.RoundtripTime);
+                        Console.Write("Time to live: {0}, ", reply.Options.Ttl);
+                        Console.Write("Don't fragment: {0}, ", reply.Options.DontFragment);
+                        Console.Write("Buffer size: {0}", reply.Buffer.Length);
+                        System.Console.WriteLine();
+                        return string.Format("OK within {0}ms", next100msRoundtripTime);
+                    }
+                    else
+                    {
+                        return string.Format("Buffer mismatch within {0}ms", next100msRoundtripTime);
+                    }
+                }
+                else
+                {
+                    var suffix = "";
+                    var last = Tracert(addr).LastOrDefault();
+                    if (last != null)
+                        suffix = String.Format(", last good {1}", reply.Status, last);
+                    Console.WriteLine("{0} FA - ping {1} failed: {2}{3}", DateTime.Now, addr, reply.Status, suffix);
+                    return String.Format("{0}{1}", reply.Status, suffix);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex.InnerException != null)
+                    return ex.InnerException.Message;
+                return ex.Message;
             }
         }
     }
